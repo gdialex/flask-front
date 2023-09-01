@@ -1,9 +1,8 @@
-from app import app, USERS, EXPRS, models
+from app import app, USERS, EXPRS, QUEST, models
 from flask import request, Response
 import json
 from http import HTTPStatus
 import random
-import re
 
 
 @app.route("/")
@@ -44,7 +43,7 @@ def user_create():
 
 @app.get("/user/<int:user_id>")
 def get_user(user_id):
-    if user_id < 0 or user_id >= len(USERS):
+    if not models.User.is_valid_id(user_id):
         return Response(status=HTTPStatus.NOT_FOUND)
     user = USERS[user_id]
     response = Response(
@@ -99,8 +98,7 @@ def generate_expr():
 
 @app.get("/math/<int:expr_id>")
 def get_expr(expr_id):
-
-    if expr_id < 0 or expr_id >= len(EXPRS):
+    if not models.Expression.is_valid_id(expr_id):
         return Response(status=HTTPStatus.NOT_FOUND)
     expression = EXPRS[expr_id]
 
@@ -117,3 +115,74 @@ def get_expr(expr_id):
         mimetype="application/json",
     )
     return response
+
+
+@app.post("/math/<int:expr_id>/solve")
+def solve_expr(expr_id):
+    data = request.get_json()
+    user_id = data["user_id"]
+    user_answer = data["user_answer"]
+
+    if not models.User.is_valid_id(user_id):
+        return Response(status=HTTPStatus.NOT_FOUND)
+    if not models.Expression.is_valid_id(expr_id):
+        return Response(status=HTTPStatus.NOT_FOUND)
+
+    expression = EXPRS[expr_id]
+    user = USERS[user_id]
+
+    if user_answer == expression.answer:
+        user.increase_score(expression.reward)
+        result = "correct"
+    else:
+        result = "wrong"
+
+    return Response(
+        json.dumps(
+            {
+                "expression_id": expr_id,
+                "result": result,
+                "reward": expression.reward,
+            }
+        ),
+        status=HTTPStatus.OK,
+        mimetype="application/json",
+    )
+
+
+@app.post("/questions/create")
+def create_question():
+    data = request.get_json()
+    title = data["title"]
+    description = data["description"]
+    question_type = data["type"]
+    question_id = len(QUEST)
+    question = None
+    if question_type == "ONE-ANSWER":
+        answer = data["answer"]  # expect string
+        if not models.OneAnswer.is_valid(answer):
+            return Response(status=HTTPStatus.BAD_REQUEST)
+        question = models.OneAnswer(question_id, title, description, answer, reward=1)
+    elif question_type == "MULTIPLE-CHOICE":
+        choices = data["choices"]  # list of choices
+        answer = data["answer"]  # expect number
+        if not models.MultipleChoice.is_valid(answer, choices):
+            return Response(status=HTTPStatus.BAD_REQUEST)
+        question = models.MultipleChoice(
+            question_id, title, description, answer, choices, reward=1
+        )
+
+    QUEST.append(question)
+    return Response(
+        json.dumps(
+            {
+                "id": question.id,
+                "title": question.title,
+                "description": question.description,
+                "type": question_type,
+                "answer": question.answer,
+            }
+        ),
+        status=HTTPStatus.OK,
+        mimetype="application/json",
+    )
