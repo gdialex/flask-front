@@ -1,6 +1,6 @@
 # models.py
 import re
-from app import USERS, EXPRS
+from app import USERS, EXPRS, QUEST
 from abc import ABC, abstractmethod
 
 
@@ -12,6 +12,7 @@ class User:
         self.phone = phone
         self.email = email
         self.score = score
+        self.history = []
 
     @staticmethod
     def is_valid_email(email):
@@ -27,12 +28,21 @@ class User:
 
     @staticmethod
     def is_valid_id(user_id):
-        if user_id < 0 or user_id >= len(USERS):
-            return False
-        return True
+        return 0 <= user_id < len(USERS)
 
     def increase_score(self, amount=1):
         self.score += amount
+
+    def repr(self):
+        return f"{self.id}) {self.first_name} {self.last_name}"
+
+    def solve(self, task, user_answer):
+        if not isinstance(task, Question) and not isinstance(task, Expression):
+            return
+        result = task.to_dict()
+        result["user_answer"] = user_answer
+        result["reward"] = task.reward if user_answer == task.answer else 0
+        self.history.append([result])
 
 
 class Expression:
@@ -56,9 +66,20 @@ class Expression:
 
     @staticmethod
     def is_valid_id(expr_id):
-        if expr_id < 0 or expr_id >= len(EXPRS):
-            return False
-        return True
+        return 0 <= expr_id < len(EXPRS)
+
+    def repr(self):
+        return f"{self.id}) {self.to_string()} = {self.answer}"
+
+    def to_dict(self):
+        return dict(
+            {
+                "id": self.id,
+                "operation": self.operation,
+                "values": self.values,
+                "string_expression": self.to_string(),
+            }
+        )
 
 
 class Question(ABC):
@@ -74,6 +95,13 @@ class Question(ABC):
     @abstractmethod
     def answer(self):
         pass
+
+    def repr(self):
+        return f"{self.id}) {self.title}"
+
+    @staticmethod
+    def is_valid_id(question_id):
+        return len(QUEST) > question_id >= 0
 
 
 class OneAnswer(Question):
@@ -95,9 +123,16 @@ class OneAnswer(Question):
 
     @staticmethod
     def is_valid(answer):
-        if not isinstance(answer, str):
-            return False
-        return True
+        return isinstance(answer, str)
+
+    def to_dict(self):
+        return dict(
+            {
+                "title": self.title,
+                "description": self.description,
+                "type": "ONE-ANSWER",
+            }
+        )
 
 
 class MultipleChoice(Question):
@@ -126,3 +161,13 @@ class MultipleChoice(Question):
         if answer < 0 or answer >= len(choices):
             return False
         return True
+
+    def to_dict(self):
+        return dict(
+            {
+                "title": self.title,
+                "description": self.description,
+                "type": "MULTIPLE-CHOICE",
+                "choices": self.choices,
+            }
+        )
