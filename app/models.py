@@ -13,6 +13,7 @@ class User:
         self.email = email
         self.score = score
         self.history = []
+        self.status = "created"
 
     @staticmethod
     def is_valid_email(email):
@@ -28,13 +29,16 @@ class User:
 
     @staticmethod
     def is_valid_id(user_id):
-        return 0 <= user_id < len(USERS)
+        return 0 <= user_id < len(USERS) and USERS[user_id].status != "deleted"
 
     def increase_score(self, amount=1):
         self.score += amount
 
     def repr(self):
-        return f"{self.id}) {self.first_name} {self.last_name}"
+        if self.status == "created":
+            return f"{self.id}) {self.first_name} {self.last_name}"
+        else:
+            return "DELETED"
 
     def solve(self, task, user_answer):
         if not isinstance(task, Question) and not isinstance(task, Expression):
@@ -42,7 +46,7 @@ class User:
         result = task.to_dict()
         result["user_answer"] = user_answer
         result["reward"] = task.reward if user_answer == task.answer else 0
-        self.history.append([result])
+        self.history.append(result)
 
     def __lt__(self, other):
         return self.score < other.score
@@ -59,7 +63,11 @@ class User:
 
     @staticmethod
     def get_leaderboard():
-        return [user.to_dict() for user in sorted(USERS, reverse=True)]
+        return [
+            user.to_dict()
+            for user in sorted(USERS, reverse=True)
+            if User.is_valid_id(user.id)
+        ]
 
 
 class Expression:
@@ -71,6 +79,7 @@ class Expression:
         if reward is None:
             reward = len(values) - 1
         self.reward = reward
+        self.status = "created"
 
     def __evaluate(self):
         return eval(self.to_string())
@@ -83,10 +92,13 @@ class Expression:
 
     @staticmethod
     def is_valid_id(expr_id):
-        return 0 <= expr_id < len(EXPRS)
+        return 0 <= expr_id < len(EXPRS) and EXPRS[expr_id].status != "deleted"
 
     def repr(self):
-        return f"{self.id}) {self.to_string()} = {self.answer}"
+        if self.status == "created":
+            return f"{self.id}) {self.to_string()} = {self.answer}"
+        else:
+            return "DELETED"
 
     def to_dict(self):
         return dict(
@@ -107,18 +119,27 @@ class Question(ABC):
         if reward is None:
             reward = 1
         self.reward = reward
+        self.status = "created"
 
     @property
     @abstractmethod
     def answer(self):
         pass
 
+    @property
+    @abstractmethod
+    def type(self):
+        pass
+
     def repr(self):
-        return f"{self.id}) {self.title}"
+        if self.status == "created":
+            return f"{self.id}) {self.title}"
+        else:
+            return "DELETED"
 
     @staticmethod
     def is_valid_id(question_id):
-        return len(QUEST) > question_id >= 0
+        return 0 <= question_id < len(QUEST) and QUEST[question_id].status != "deleted"
 
 
 class OneAnswer(Question):
@@ -137,6 +158,10 @@ class OneAnswer(Question):
     def answer(self, value: str):
         if self.is_valid(value):
             self._answer = value
+
+    @property
+    def type(self):
+        return "ONE-ANSWER"
 
     @staticmethod
     def is_valid(answer):
@@ -170,6 +195,10 @@ class MultipleChoice(Question):
     def answer(self, value: int):
         if self.is_valid(value, self.choices):
             self._answer = value
+
+    @property
+    def type(self):
+        return "MULTIPLE-CHOICE"
 
     @staticmethod
     def is_valid(answer, choices):

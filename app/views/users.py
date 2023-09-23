@@ -100,3 +100,27 @@ def get_users_leaderboard():
         )
     else:
         return Response(status=HTTPStatus.BAD_REQUEST)
+
+
+@app.delete("/user/<int:user_id>")
+def delete_user(user_id):
+    if not models.User.is_valid_id(user_id):
+        return Response(status=HTTPStatus.NOT_FOUND)
+    user = USERS[user_id]
+    user.status = "deleted"
+    response = Response(
+        json.dumps(
+            {
+                "id": user.id,
+                "first_name": user.first_name,
+                "last_name": user.last_name,
+                "phone": user.phone,
+                "email": user.email,
+                "score": user.score,
+                "status": user.status,
+            }
+        ),
+        HTTPStatus.OK,
+        mimetype="application/json",
+    )
+    return response

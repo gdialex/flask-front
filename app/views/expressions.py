@@ -12,7 +12,10 @@ def generate_expr():
     count_nums = data["count_nums"]
     operation = data["operation"]  # expect +,*,-,//,**,
     if operation == "random":
-        operation = random.choice(["+", "*", "-", "//", "**"])
+        if count_nums == 2:
+            operation = random.choice(["+", "*"])
+        else:
+            operation = random.choice(["+", "*", "-", "//", "**"])
     min_num = data["min"]
     max_num = data["max"]
 
@@ -94,3 +97,25 @@ def solve_expr(expr_id):
         status=HTTPStatus.OK,
         mimetype="application/json",
     )
+
+
+@app.delete("/math/<int:expr_id>")
+def delete_expr(expr_id):
+    if not models.Expression.is_valid_id(expr_id):
+        return Response(status=HTTPStatus.NOT_FOUND)
+    expression = EXPRS[expr_id]
+    expression.status = "deleted"
+    response = Response(
+        json.dumps(
+            {
+                "id": expression.id,
+                "operation": expression.operation,
+                "values": expression.values,
+                "string_expression": expression.to_string(),
+                "status": expression.status,
+            }
+        ),
+        HTTPStatus.OK,
+        mimetype="application/json",
+    )
+    return response

@@ -35,16 +35,17 @@ def create_question():
             status=HTTPStatus.BAD_REQUEST,
         )
     QUEST.append(question)
+    response_json = {
+        "id": question.id,
+        "title": question.title,
+        "description": question.description,
+        "type": question_type,
+        "answer": question.answer,
+    }
+    if question_type == "MULTIPLE-CHOICE":
+        response_json["choices"] = question.choices
     return Response(
-        json.dumps(
-            {
-                "id": question.id,
-                "title": question.title,
-                "description": question.description,
-                "type": question_type,
-                "answer": question.answer,
-            }
-        ),
+        json.dumps(response_json),
         status=HTTPStatus.CREATED,
         mimetype="application/json",
     )
@@ -52,13 +53,13 @@ def create_question():
 
 @app.get("/questions/random")
 def get_random_question():
-    if len(QUEST) == 0:
+    valid_questions = [question for question in QUEST if question.status != "deleted"]
+    if len(valid_questions) == 0:
         return Response(
             f'No questions in the database. Please, <a href="{url_for("create_question")}">add some questions first</a>',
             status=HTTPStatus.NOT_FOUND,
         )
-    question_id = random.randint(0, len(QUEST) - 1)
-    question = QUEST[question_id]
+    question = random.choice(valid_questions)
     return Response(
         json.dumps(
             {
@@ -66,6 +67,32 @@ def get_random_question():
                 "reward": question.reward,
             }
         ),
+        status=HTTPStatus.OK,
+        mimetype="application/json",
+    )
+
+
+@app.get("/questions/<int:question_id>")
+def get_question(question_id):
+    if not models.Question.is_valid_id(question_id):
+        return Response(status=HTTPStatus.NOT_FOUND)
+
+    data = request.get_json()
+    hide_answer = data["mode"] == "no answer"
+    question = QUEST[question_id]
+
+    response_json = {
+        "id": question.id,
+        "title": question.title,
+        "description": question.description,
+        "type": question.type,
+        "reward": question.reward,
+        "answer": ("hidden" if hide_answer else question.answer),
+    }
+    if question.type == "MULTIPLE-CHOICE":
+        response_json["choices"] = question.choices
+    return Response(
+        json.dumps(response_json),
         status=HTTPStatus.OK,
         mimetype="application/json",
     )
@@ -97,10 +124,10 @@ def solve_question(question_id):
 
     if user_answer == question.answer:
         user.increase_score(question.reward)
-        result = "Correct"
+        result = "correct"
         reward = question.reward
     else:
-        result = "Wrong"
+        result = "wrong"
         reward = 0
 
     user.solve(question, user_answer)  # add to history
@@ -113,6 +140,29 @@ def solve_question(question_id):
                 "reward": reward,
             }
         ),
+        status=HTTPStatus.OK,
+        mimetype="application/json",
+    )
+
+
+@app.delete("/questions/<int:question_id>")
+def delete_question(question_id):
+    if not models.Question.is_valid_id(question_id):
+        return Response(status=HTTPStatus.NOT_FOUND)
+    question = QUEST[question_id]
+    question.status = "deleted"
+    response_json = {
+        "id": question.id,
+        "title": question.title,
+        "description": question.description,
+        "type": question.type,
+        "reward": question.reward,
+        "answer": question.answer,
+    }
+    if question.type == "MULTIPLE-CHOICE":
+        response_json["choices"] = question.choices
+    return Response(
+        json.dumps(response_json),
         status=HTTPStatus.OK,
         mimetype="application/json",
     )
